@@ -1,0 +1,38 @@
+# Simulation overview
+
+These simulations generate counts for varying NB distributions with different design matrices, where the null hypothesis is always true.
+The idea is to then filter for the top 10% of regions according to the specified filter statistic (usually the mean log-CPM, reported by `aveLogCPM`).
+The retained rows are analyzed using _edgeR_ to compute p-values, and the observed type I error rate is compared to each specified threshold.
+As a reference, a random selection of rows are used to compute error rates to demonstrate the effect of the filtering strategy.
+
+# Comments on `libsize.R`
+
+## Effect of filtering with variable library sizes
+
+By default, `aveLogCPM` uses a dispersion of 0.05 to compute the mean.
+If the true dispersion is lower, it seems that the filter becomes anticonservative, while it becomes conservative if the true dispersion is higher.
+Fortunately, this only seems to manifest with large differences in the library size, and the filter is still robust to a doubling of the library sizes between groups.
+(I presume you would just end up with inflated dispersions and conservativeness if the differences in library sizes occurred _within_ groups.)
+
+The ideal solution would be to use the true dispersion for each test, e.g., estimated from the corresponding count data.
+However, the direct estimates are unstable and empirical Bayes shrinkage is troubled by low counts.
+Another solution would be to downsample until all libraries are of the same size.
+This would allow the use of the average count, but is not appealing as all libraries would be forced to the size of the smallest library.
+
+# Comments on `misc.R`
+
+## Effect of filtering with variable dispersions
+
+Applying a stringent mean filter will select for higher dispersions.
+This is because high-dispersion features are more likely to achieve large sample means.
+The result is to encourage inflation of the dispersion estimate, which results in some distortion of the p-value distribution.
+However, this seems like an edge case, as it is minor if the dispersion is low or the prior d.f. is high.
+(It gets a bit funky at low prior d.f. anyway, as the QL model handles variability in the QL dispersions not NB dispersions.)
+
+In practice, this is not much of an issue.
+For ChIP-seq data, the prior degrees of freedom is usually quite high such that there is not much variability in the dispersions.
+For RNA-seq data, the filter boundary is not dense so the specifics of filtering doesn't matter.
+The same effect is present in the other filters anyway (in addition to their poor performance on the constant dispersion case),
+   as high dispersions make it more likely to get one or two peaks above the threshold.
+
+
