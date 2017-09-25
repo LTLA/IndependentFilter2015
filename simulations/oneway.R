@@ -9,12 +9,29 @@ dir.create("results-oneway", showWarning=FALSE)
 design <- model.matrix(~rep(0:1, each=3))
 nlibs <- nrow(design)
 
-pdf("results-oneway/twogroup.pdf", width=10, height=5)
+pdf("results-oneway/twogroup_balanced.pdf", width=10, height=5)
 par(mfrow=c(1,2))
 for (mean in c(20, 50, 100)) {
     for (disp in c(0.01, 0.05, 0.2)) { 
         makePlots(rep(mean, nlibs), disp, design, main=paste0("Mean = ", mean, ", dispersion = ", disp))
 
+    }
+}
+dev.off()
+
+# Repeating with variable group sizes.
+
+mean <- 20
+disp <- 0.01
+
+pdf("results-oneway/twogroup_unbalanced.pdf", width=10, height=5)
+par(mfrow=c(1,2))
+for (g1 in 2:5) {
+    for (g2 in 1:g1) {
+        groupings <- rep(0:1, c(g1, g2))
+        design <- model.matrix(~groupings)
+        nlibs <- g1+g2
+        makePlots(rep(mean, nlibs), disp, design, main=paste0("Samples = ", g1, " vs ", g2))
     }
 }
 dev.off()
