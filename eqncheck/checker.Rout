@@ -1,0 +1,194 @@
+
+R version 3.2.0 (2015-04-16) -- "Full of Ingredients"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # This checks the derivations of the distributions in the filtering chapter.
+> 
+> isOnline <- function(mat, point, tol) {
++ 	ninst <- nrow(mat)
++ 	adj <- t(t(mat) - point)
++ 	is.max <- max.col(adj)
++ 	is.max <- (is.max - 1) * ninst + 1:ninst
++ 	is.min <- max.col(-adj)
++ 	is.min <- (is.min - 1) * ninst + 1:ninst
++ 	stats <- mat[is.max] - mat[is.min]
++ 	return(stats < tol)
++ }
+> 
+> getGamma <- function(mat, point) { rowMeans(mat) - mean(point) }
+> 
+> ##################
+> # First, regarding the distribution of points on each z-line.
+> 
+> simNcheck <- function(nlibs, my.sd, my.means, point, tol=0.1) { 
++ 	ninst <- 1e6
++ 	my.norm <- matrix(rnorm(nlibs*ninst, mean=my.means, sd=my.sd), ncol=nlibs, byrow=TRUE)
++ 	
++ 	keep <- isOnline(my.norm, point, tol=tol)
++ 	my.dist <- getGamma(my.norm[keep,], point)
++ 	cat(sprintf("Using %i points, we have a mean of %.4f and a variance of %.4f\n", 
++ 			sum(keep), mean(my.dist), var(my.dist)))
++ 
++ 	# Following the z-line calculations:
++ 	cat(sprintf("Intended mean should be %.4f, variance should be %.4f\n", 
++ 			mean(my.means) - mean(point), my.sd^2/nlibs))
++ 	return(invisible(NULL))
++ }
+> 
+> set.seed(237685)
+> 
+> simNcheck(4, 0.5, c(0,1,0,0), c(1,1,0,1))
+Using 88356 points, we have a mean of -0.4995 and a variance of 0.0626
+Intended mean should be -0.5000, variance should be 0.0625
+> 
+> simNcheck(4, 0.5, c(0,1,0,0), c(1,0,0,1))
+Using 19605 points, we have a mean of -0.2465 and a variance of 0.0623
+Intended mean should be -0.2500, variance should be 0.0625
+> 
+> simNcheck(4, 0.5, c(0,1,0,0), c(1,2,0,1))
+Using 368934 points, we have a mean of -0.7501 and a variance of 0.0623
+Intended mean should be -0.7500, variance should be 0.0625
+> 
+> simNcheck(4, 0.5, c(0,0.5,0,0), c(1,1,0,1))
+Using 160721 points, we have a mean of -0.6252 and a variance of 0.0629
+Intended mean should be -0.6250, variance should be 0.0625
+> 
+> simNcheck(4, 0.2, c(0,1,0,0), c(1,1,0,1))
+Using 149079 points, we have a mean of -0.4996 and a variance of 0.0100
+Intended mean should be -0.5000, variance should be 0.0100
+> 
+> simNcheck(4, 1, c(0,1,0,0), c(1,1,0,1))
+Using 27931 points, we have a mean of -0.4965 and a variance of 0.2522
+Intended mean should be -0.5000, variance should be 0.2500
+> 
+> simNcheck(3, 1, c(0,1,0), c(1,1,0))
+Using 83899 points, we have a mean of -0.3329 and a variance of 0.3334
+Intended mean should be -0.3333, variance should be 0.3333
+> 
+> simNcheck(2, 1, c(0,1), c(1,1))
+Using 43952 points, we have a mean of -0.4991 and a variance of 0.4979
+Intended mean should be -0.5000, variance should be 0.5000
+> 
+> ##################
+> # Second, regarding the distribution of points on each Z-plane.
+> 
+> simNcheck2 <- function(nlibs, my.sd, 
++ 		my.sd.1, A.1, B.1,
++ 		my.sd.2, A.2, B.2,
++ 		point.1, point.2, tol=0.1) {
++ 
++ 	ninst <- 1e6
++ 	my.means.x <- matrix(rnorm(nlibs*ninst, mean=0, sd=my.sd), ncol=nlibs, byrow=TRUE)
++ 	my.norm.1 <- matrix(rnorm(nlibs*ninst, mean=my.means.x*A.1 + B.1, sd=my.sd.1), ncol=nlibs, byrow=TRUE)
++ 	my.norm.2 <- matrix(rnorm(nlibs*ninst, mean=my.means.x*A.2 + B.2, sd=my.sd.2), ncol=nlibs, byrow=TRUE)
++ 
++ 	keep.1 <- isOnline(my.norm.1, point.1, tol=tol)
++ 	keep.2 <- isOnline(my.norm.2, point.2, tol=tol)
++ 	keep <- keep.1 & keep.2
++ 	my.dist.1 <- getGamma(my.norm.1[keep,], point.1)
++ 	my.dist.2 <- getGamma(my.norm.2[keep,], point.2)
++ 
++ 	cat(sprintf("Using %i points, observed means are %.4f and %.4f\n", 
++ 		sum(keep), mean(my.dist.1), mean(my.dist.2)))
++ 	cat(sprintf("Intended means are %.4f and %.4f\n\n", 
++ 		mean(B.1) - mean(point.1), mean(B.2) - mean(point.2)))
++ 
++ 	cat(sprintf("Observed variances are %.4f and %.4f (covariance of %.4f)\n", 
++ 		var(my.dist.1), var(my.dist.2), cov(my.dist.1, my.dist.2)))
++ 	
++ 	R <- 1/my.sd^2 + (A.1/my.sd.1)^2 + (A.2/my.sd.2)^2
++ 	inv1 <- nlibs/R * (R - (A.1/my.sd.1)^2) / my.sd.1^2 
++ 	inv2 <- nlibs/R * (R - (A.2/my.sd.2)^2) / my.sd.2^2 
++ 	inv12 <- nlibs/R * -A.1 * A.2 / (my.sd.1^2*my.sd.2^2)
++ 
++ 	mat <- rbind(c(inv1, inv12), 
++ 		     c(inv12, inv2))
++ 	mat <- solve(mat)
++ 	cat(sprintf("Intended variances are %.4f and %.4f (covariance of %.4f)\n",
++ 		mat[1], mat[4], mat[2]))
++ 	return(invisible(NULL))
++ }
+> 
+> set.seed(13585)
+> 
+> simNcheck2(4, my.sd=0.5, 
++ 	my.sd.1=0.5, A.1=2, B.1=c(1,1,1,1),
++ 	my.sd.2=0.5, A.2=2, B.2=c(2,2,2,2),
++ 	point.1=c(0,0,0,1), point.2=c(0,1,0,0))
+Using 1886 points, observed means are 0.7511 and 1.7556
+Intended means are 0.7500 and 1.7500
+
+Observed variances are 0.3125 and 0.3095 (covariance of 0.2465)
+Intended variances are 0.3125 and 0.3125 (covariance of 0.2500)
+> 
+> simNcheck2(4, my.sd=0.5, 
++ 	my.sd.1=0.5, A.1=1, B.1=c(1,1,1,1),
++ 	my.sd.2=0.5, A.2=2, B.2=c(2,2,2,2),
++ 	point.1=c(0,0,0,1), point.2=c(0,1,0,0))
+Using 3429 points, observed means are 0.7492 and 1.7494
+Intended means are 0.7500 and 1.7500
+
+Observed variances are 0.1250 and 0.3081 (covariance of 0.1222)
+Intended variances are 0.1250 and 0.3125 (covariance of 0.1250)
+> 
+> simNcheck2(4, my.sd=0.2, 
++ 	my.sd.1=0.5, A.1=1, B.1=c(1,1,1,1),
++ 	my.sd.2=0.5, A.2=2, B.2=c(2,2,2,2),
++ 	point.1=c(0,0,0,1), point.2=c(0,1,0,0))
+Using 15701 points, observed means are 0.7524 and 1.7520
+Intended means are 0.7500 and 1.7500
+
+Observed variances are 0.0733 and 0.1027 (covariance of 0.0209)
+Intended variances are 0.0725 and 0.1025 (covariance of 0.0200)
+> 
+> simNcheck2(4, my.sd=0.2, 
++ 	my.sd.1=1, A.1=1, B.1=c(1,1,1,1),
++ 	my.sd.2=0.5, A.2=2, B.2=c(2,2,2,2),
++ 	point.1=c(0,0,0,1), point.2=c(0,1,0,0))
+Using 3532 points, observed means are 0.7359 and 1.7457
+Intended means are 0.7500 and 1.7500
+
+Observed variances are 0.2506 and 0.1014 (covariance of 0.0177)
+Intended variances are 0.2600 and 0.1025 (covariance of 0.0200)
+> 
+> simNcheck2(4, my.sd=0.5, 
++ 	my.sd.1=0.5, A.1=1, B.1=c(1,0,1,0),
++ 	my.sd.2=0.5, A.2=2, B.2=c(2,1,2,1),
++ 	point.2=c(2,1,2,1), point.1=c(1,0,1,0), tol=0.01)
+Using 4372 points, observed means are -0.0093 and -0.0032
+Intended means are 0.0000 and 0.0000
+
+Observed variances are 0.1233 and 0.3182 (covariance of 0.1240)
+Intended variances are 0.1250 and 0.3125 (covariance of 0.1250)
+> 
+> simNcheck2(3, my.sd=0.2, 
++ 	my.sd.1=0.2, A.1=1, B.1=c(1,1,1),
++ 	my.sd.2=0.2, A.2=2, B.2=c(2,2,2),
++ 	point.1=c(1,1,1), point.2=c(2,2,2))
+Using 750 points, observed means are -0.0057 and 0.0010
+Intended means are 0.0000 and 0.0000
+
+Observed variances are 0.0247 and 0.0665 (covariance of 0.0247)
+Intended variances are 0.0267 and 0.0667 (covariance of 0.0267)
+> 
+> ##################
+> 
+> 
+> proc.time()
+   user  system elapsed 
+ 13.556   0.102  13.638 
