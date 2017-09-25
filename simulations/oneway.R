@@ -1,4 +1,4 @@
-# This script tests the behaviour of the mean-based filter with different experimental designs.
+# This script tests the behaviour of the mean-based filter with different one-way layouts.
 # We load in the relevant functions to perform the testing.
 
 source("functions.R")

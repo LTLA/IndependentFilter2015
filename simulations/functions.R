@@ -9,7 +9,7 @@ library(edgeR)
     }
 }
 
-detectDiff <- function(counts, design, coef, lib.size=NULL) {
+detectDiff <- function(counts, design, coef, lib.size=NULL)
 # Uses QL edgeR to compute p-values for a given count matrix and design.
 {
     y <- DGEList(counts, lib.size=lib.size)
@@ -60,7 +60,7 @@ makePlots <- function(means, disp, design, coef=ncol(design), main="", equal.lib
     null.p <- ref.p <- list()
     for (it in 1:10) {
         counts <- generator(means, disp)
-        lib.size <- .get_lib_size(counts, force.equal=equal.libs)
+        lib.size <- .get_lib_sizes(counts, force.equal=equal.libs)
 
         keep <- meanFilter(counts, lib.size=lib.size)
         res <- detectDiff(counts[keep,], design, lib.size=lib.size, coef=coef)
