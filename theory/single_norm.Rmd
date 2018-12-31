@@ -59,6 +59,62 @@ We now apply a sample mean threshold to instances of $\mathbf{y}$, which discard
 Recall that all instances in each subset have the same model statistics, i.e., variances and $p$-values.
 If each subset loses the same proportion of instances, this implies that the filter will not change the distribution of statistics across subsets.
 
+# Verification
+
+We check the expected distribution of $\gamma$ with simulations.
+First we define a function that determines which points in `mat` are consistent with a given $Z(.)$ (defined by `point`).
+
+```{r}
+onZ <- function(mat, point, tol=0.01) {
+    point <- point - mean(point)
+    adj <- t(t(mat) - point)
+
+    # Only keeping points consistent with 'point + x' for some 'x'.
+    ninst <- nrow(mat)
+    is.max <- max.col(adj)
+    is.max <- (is.max - 1) * ninst + 1:ninst
+    is.min <- max.col(-adj)
+    is.min <- (is.min - 1) * ninst + 1:ninst
+    dev <- mat[is.max] - mat[is.min]
+
+    keep <- dev <= tol
+    rowMeans(adj[keep,,drop=FALSE])
+}
+```
+
+We define a wrapper function to simulate data and report statistics.
+
+```{r}
+simNcheck <- function(nlibs, my.means, my.sd, point, tol=0.01) {
+    ninst <- 1e6
+    my.norm <- matrix(rnorm(nlibs*ninst, mean=my.means, sd=my.sd), ncol=nlibs, byrow=TRUE)
+    my.dist <- onZ(my.norm, point, tol=tol)
+    data.frame(n=length(my.dist),
+        observed.mean=mean(my.dist),
+        observed.var=var(my.dist),
+        intended.mean=mean(my.means),
+        intended.var=my.sd^2/nlibs)
+}
+```
+
+We can see that the intended and observed statistics are fairly similar, which serves to validate our proof.
+
+```{r}
+set.seed(237685)
+
+simNcheck(4, c(0,1,0,0), 0.5, c(1,1,0,1))
+                              
+simNcheck(4, c(0,1,0,0), 0.5, c(1,0,0,1))
+                              
+simNcheck(4, c(0,1,0,0), 0.5, c(1,2,0,1))
+                              
+simNcheck(4, c(0,0.5,0,0), 0.5, c(1,1,0,1))
+                              
+simNcheck(4, c(0,1,0,0), 0.2,c(1,1,0,1))
+                              
+simNcheck(4, c(0,1,0,0), 1, c(1,1,0,1))
+```
+
 # Comments
 
 ## Supported types of hypotheses
