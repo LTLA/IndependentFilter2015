@@ -1,0 +1,121 @@
+---
+title: Filtering for count data
+author: Aaron Lun
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc_float: yes
+    fig_caption: no
+---
+
+```{r, echo=FALSE, results="hide"}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+# Overview
+
+Empirical testing suggests that the maximum likelihood estimate (MLE) for the $\mu$ parameter in a negative binomial (NB)-distributed count data is an independent filter statistic.
+That is to say, if we were to fit an intercept-only NB generalized linear model (GLM) to a vector of counts, the coefficient estimate should be used as the filter statistic.
+Variants of this value are also known as the "overall NB mean" (see `r Biocpkg("csaw")` documentation) or the "average abundance" (see `r Biocpkg("edgeR")`).
+
+The independence of the overall NB mean as a filter statistic has no obvious theoretical basis.
+The arguments we made for the normal case do not apply here, and an analogy is dubious given the failure to extend the normal-case proof even for weighted linear models.
+Nonetheless, as the various simulations in `theory` demonstrate, the NB mean MLE works surprisingly well in the most common scenairos.
+This motivates its use as a filtering statistic prior to differential analyses with NB GLMs.
+
+# Not the sample mean
+
+The overall NB mean is not generally the sample mean of the counts.
+This becomes apparent in datasets that exhibit differences in the GLM offsets.
+The sample mean is decidedly not an independent filter statistic, whereas the overall NB mean behaves as expected.
+
+```{r}
+library(edgeR)
+y <- matrix(rnbinom(1000000, mu=rep(c(10, 50), each=5), size=10), 
+    ncol=10, byrow=TRUE)
+
+sample.mean <- rowMeans(y)
+offsets <- log(colSums(y))
+nb.mean <- mglmOneGroup(y, offset=offsets, dispersion=0.1)
+
+design <- model.matrix(~gl(2,5))
+fit <- glmFit(y, design, dispersion=0.1, offset=offsets)
+res <- glmLRT(fit)
+
+par(mfrow=c(1,2))
+hist(res$table$PValue[head(order(-sample.mean), 10000)],
+    main="By sample mean", col="grey80")
+hist(res$table$PValue[head(order(-nb.mean), 10000)], 
+    main="By overall NB mean", col="grey80")
+```
+
+The exceptions occur with Poisson-distributed counts or when the offsets are identical.
+In such cases, the overall NB mean _is_ the sample mean, so there is no problem with using one or the other.c
+
+# Logistical concerns
+
+## Knowing the dispersion
+
+Strictly speaking, the dispersion needs to be known prior to calculating the overall NB mean.
+However, filtering usually occurs at the first step of any differential analysis.
+This means that an appropriate dispersion estimate is not available during calculation of the overall NB mean.
+
+There are several motivations for the current state of affairs.
+Filtering first improves computational efficiency by skipping work on uninteresting low-abundance features (not negligible when dealing with millions of potential features!);
+and avoids problems with dispersion estimation at low counts interfering with empirical Bayes (EB) shrinkage.
+The latter effect has many contributing factors including:
+
+- Discreteness of the dispersion estimates that interfere with estimation of the EB parameters.
+- Sharp increases in the dispersions at low abundances, making it difficult to fit a stable trend.
+- The dominance of low-abundance features in many datasets, dominating the trend fit, e.g., for span-based algorithms. 
+
+Furthermore, it is difficult to obtain a precise dispersion estimate for each feature in genomics datasets with limited replication.
+An EB-shrunken estimate will probably be necessary, which is better than an arbitrary value but not perfect.
+
+## Knowing the normalization factors
+
+Correct calculation of the overall NB mean requires precise GLM offsets.
+For genomics applications, offsets are most simply defined as the log-library sizes.
+However, additional scaling normalization may be necessary to account for effects such as composition bias (e.g., TMM normalization in the `calcNormFactors()` function).
+
+Standard workflows perform normalization after filtering due to the detrimental effect of low counts on the former.
+Discreteness interferes with calculation of quantiles and the high variability of low counts (relative to the mean) degrades the precision of scaling factor estimates. 
+This means that normalization factors (and thus accurate offsets) are not actually available during calculation of the filter statistic.
+
+## A more accurate workflow
+
+In theory, a more accurate pre-processing procedure would look like:
+
+1. Apply a very relaxed filter based on the overall NB mean computed with a guess for the dispersion.
+2. Estimate the dispersions and normalization factors.
+3. Use the estimated dispersions/normalization factors to estimate the overall NB mean among the features retained by the first filter.
+4. Re-filter more stringently using the re-estimated overall NB mean.
+5. Proceed with the rest of the analysis.
+
+Step **1** mitigates the computational and statistical problems with dispersion estimation and normalization for low abundance features.
+We further assume that the subset of features retained by the filtering step in **3** would be the same regardless of whether **1** was applied.
+This requires a major increase in the stringency of **3** compared to **1**.
+
+Needless to say, the above approach is rather tedious to implement and the benefits are not obvious.
+Minor inaccuracies in the dispersion estimates are probably well-tolerated and can be ignored altogether if the offsets are the same across samples.
+(Vice versa for inaccuracies in the offsets if the dispersion is near zero.)
+Thus, we recommend simply filtering once and proceeding to the rest of the analysis.
+
+# Considering the filter boundary
+
+In practice, the effect of differences between filtering strategies depends on the density of features at the filter boundary.
+Consider a $n$-dimensional space in which all features are distributed, where the coordinates of each feature are defined as the values of the observations or counts across all of the $n$ samples in the dataset.
+The filter boundary refers to a high-dimensional surface in this space which separates the features that are retained from those that are filtered out.
+If there are few features near the boundary, the use of an inappropriate filter will have little impact on the distribution of the sample variances or test statistics.
+This is often the case for RNA-seq datasets where the abundances of all genes are spread sparsely across several orders of magnitude.
+Changes in the shape of the filter boundary at any particular abundance will have little effect on gene retention.
+In contrast, ChIP-seq datasets are dominated by low-abundance regions containing weak binding sites and/or background enrichment.
+This results in a high density of features at the boundary, such that differences in filtering are likely to affect retention.
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+
